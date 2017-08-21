@@ -1,0 +1,104 @@
+---
+title: "Prediction of Weight Lifting Style as Measured by Accelerometers"
+author: "Nihar Satsangi"
+date: "August 19, 2017"
+output: html_document
+---
+
+**Background**
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. 
+
+In this project, our goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. Given data from accelerometers, the goal is to predict the class of action which is one of the following.
+
+1. exactly according to the specification (A)
+
+2. throwing elbows to the front (B)
+
+3. lifting the dumbbell only halfway (C)
+
+4. lowering the dumbbell only halfway (D)
+
+5. throwing the hips to the front (E).
+
+More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+
+**Preparing the Data**
+
+First, we load both the datasets and the required libraries.
+
+```{r setup, include=TRUE, echo=TRUE, message=FALSE, warning=FALSE}
+library(caret)
+library(randomForest)
+pmlTraining <- read.csv('pml-training.csv',header= TRUE)
+pmlTesting <- read.csv('pml-testing.csv',header=TRUE)
+```
+
+Now, let's clean the training data by removing NAs, near zero variance and irrelevant variables/columns. Here, this is being done by creating a function that removes every column that have more than half of its rows with empty data, NA data and not numerical data. Also, before returning the new dataframe, the function removes the first 4 columns that are time-stamped or are not relevant information to predict.
+
+```{r cleanfunction}
+ProcessData <- function (dataframe){
+  col <- vector(mode = "numeric")
+  count <- 0
+  for(i in 1:ncol(dataframe))
+  {
+    if(colnames(dataframe)[i]=='classe'){next;}
+    
+    total <- length(dataframe[,i]);
+    
+    NAs <- length(dataframe[is.na(dataframe[,i]),i]);
+    empty <- length(dataframe[dataframe[,i]=='',i])
+    notNumber <- length(dataframe[!is.numeric(dataframe[,i]),i]);
+    
+    if(round(NAs/total)==1 | round(empty/total)==1 | round(notNumber/total)==1){
+      col <- rbind(col, i)
+      count <- count+1;
+    }
+  }
+  
+  process <- dataframe[,as.numeric(col)*(-1)]
+  for(i in 1:(ncol(process)-1)){ process[,i] <- as.numeric(process[,i]); }
+  process[,c(1,2,3,4)*(-1)]
+}
+```
+
+Now that the function to clean the data has been created, let's preprocess the training data.
+
+```{r preprocess}
+cleanedData <- ProcessData(pmlTraining)
+```
+
+**Building the Model**
+
+We will build the model using random forest.Before doing that, we will split the data in two sets - Training & Validation.
+
+```{r rfmodel}
+inTrain<-createDataPartition(y = cleanedData$classe,p=0.7,list=FALSE)
+trainSet <- cleanedData[inTrain,]
+validationSet <- cleanedData[-inTrain,]
+fit <- randomForest(classe ~ ., data = trainSet)
+```
+
+With the model trained, let's test it on the Validation Set
+
+```{r testvalidation}
+confusionMatrix(predict(fit, validationSet[,-53]), validationSet$classe)
+```
+
+We can see that the model is more than 99%.
+
+**Predictions in the Test Set**
+
+As in the case of the training data, here also we will clean the test data first and then apply the model on it.
+
+```{r testset}
+testSet <- ProcessData(pmlTesting)
+predict(fit, testSet)
+```
+
+This model yields high accuracy on all the test observations.
+
+**Conclusion**
+
+We are able to provide very good prediction of weight lifting style as measured with accelerometers.
